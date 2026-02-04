@@ -18,17 +18,3 @@ services:
     depends_on:
       - backend
 
-  # ADD THIS SERVICE
-  nginx:
-    image: nginx:alpine
-    container_name: nginx-container
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # We will copy these folders to EC2 in the workflow
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/certs:/etc/nginx/certs
-    depends_on:
-      - frontend
