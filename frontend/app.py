@@ -8,7 +8,7 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Microservices App</title>
+    <title>Microservices-:App</title>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f0f2f5; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; }
@@ -19,7 +19,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="card">
         <h1>Frontend Service</h1>
-        <p>Backend Status: <strong>{{ backend_message }}</strong></p>
+        <p>Backend Status : <strong>{{ backend_message }}</strong></p>
     </div>
 </body>
 </html>
@@ -38,4 +38,5 @@ def index():
     return render_template_string(HTML_TEMPLATE, backend_message=message)
 
 if __name__ == "__main__":
+
     app.run(host='0.0.0.0', port=5000)
