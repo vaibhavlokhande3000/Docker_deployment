@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  backend:
+    # REPLACED 'build' with 'image' pointing to Docker Hub
+    image: ${{ DOCKER_USERNAME }}/my-backend:latest
+    container_name: backend-container
+    restart: always
+    ports:
+      - "5000:5000"  # Adjust your ports
+    env_file: .env   # Reads environment variables on the server
+
+  frontend:
+    image: ${{ DOCKER_USERNAME }}/my-frontend:latest
+    container_name: frontend-container
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
