@@ -5,12 +5,12 @@ on:
     branches: [ "main" ]
 
 env:
-  # Define image names here
   FRONTEND_IMAGE: "my-frontend"
   BACKEND_IMAGE: "my-backend"
+  NGINX_IMAGE: "my-nginx"
 
 jobs:
-  # JOB 1: Build and Push Images
+  # JOB 1: Build and Push All Images
   build-and-push:
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Build Backend
+      # 1. Build Backend
       - name: Build/Push Backend
         uses: docker/build-push-action@v5
         with:
@@ -32,7 +32,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.BACKEND_IMAGE }}:latest
 
-      # Build Frontend
+      # 2. Build Frontend
       - name: Build/Push Frontend
         uses: docker/build-push-action@v5
         with:
@@ -41,7 +41,16 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest
 
-  # JOB 2: Deploy to EC2
+      # 3. Build Nginx (Contains Config & Certs)
+      - name: Build/Push Nginx
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nginx
+          file: ./nginx/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.NGINX_IMAGE }}:latest
+
+  # JOB 2: Deploy using ONLY Docker Images
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -51,45 +60,58 @@ jobs:
     timeout-minutes: 2
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # STEP A: Copy the prod compose file to EC2
-      - name: Copy Compose File to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.prod.yml"
-          target: "/home/${{ secrets.EC2_USER }}/app/"
-          # Strip the file path so it lands directly in ~/app/
-          strip_components: 0
-
-      # STEP B: SSH and Run Docker Compose
-      - name: Deploy via SSH
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: BACKEND_IMAGE,FRONTEND_IMAGE
+          envs: FRONTEND_IMAGE,BACKEND_IMAGE,NGINX_IMAGE
           script: |
-            # Navigate to where we copied the file
-            cd /home/${{ secrets.EC2_USER }}/app/
-
-            # 1. Export variables so docker-compose can see them
             export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-            
-            # 2. Login to Docker Hub
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+            export DOCKER_PWD=${{ secrets.DOCKER_PASSWORD }}
 
-            # 3. Pull latest images
-            # We explicitly point to the prod file
-            docker-compose -f docker-compose.prod.yml pull
+            # 1. Login to Docker Hub
+            echo "$DOCKER_PWD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
-            # 4. Restart containers (Detached mode)
-            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+            # 2. Create a shared network (if not exists)
+            docker network create app-network || true
 
-            # 5. Clean up old images
+            # 3. Stop and Remove ALL existing containers
+            echo "Stopping old containers..."
+            docker stop nginx-container frontend-container backend-container || true
+            docker rm nginx-container frontend-container backend-container || true
+
+            # 4. Pull fresh images
+            echo "Pulling images..."
+            docker pull $DOCKER_USERNAME/${{ env.BACKEND_IMAGE }}:latest
+            docker pull $DOCKER_USERNAME/${{ env.FRONTEND_IMAGE }}:latest
+            docker pull $DOCKER_USERNAME/${{ env.NGINX_IMAGE }}:latest
+
+            # 5. Run Backend
+            # (Internal only, no -p ports needed)
+            docker run -d \
+              --name backend-container \
+              --network app-network \
+              --restart always \
+              $DOCKER_USERNAME/${{ env.BACKEND_IMAGE }}:latest
+
+            # 6. Run Frontend
+            # (Internal only, connects to backend via network name)
+            docker run -d \
+              --name frontend-container \
+              --network app-network \
+              --restart always \
+              $DOCKER_USERNAME/${{ env.FRONTEND_IMAGE }}:latest
+
+            # 7. Run Nginx
+            # (Public facing, mapped ports 80/443)
+            docker run -d \
+              --name nginx-container \
+              --network app-network \
+              --restart always \
+              -p 80:80 -p 443:443 \
+              $DOCKER_USERNAME/${{ env.NGINX_IMAGE }}:latest
+
+            # 8. Cleanup
             docker image prune -a -f
