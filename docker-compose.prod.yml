@@ -15,6 +15,6 @@ services:
     container_name: frontend-container
     restart: always
     ports:
-      - "80:5000" # Maps EC2 port 80 to container port 5000 so it's accessible via HTTP
+      - "127.0.0.1:5000:5000" # Maps EC2 port 80 to container port 5000 so it's accessible via HTTP
     depends_on:
       - backend
