@@ -38,7 +38,10 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-     # <--- This triggers the Manual Approval Gate
+    
+    # ✅ THIS IS THE KEY LINE FOR MANUAL APPROVAL
+    # It tells GitHub to pause here and wait for a reviewer assigned to "production"
+    environment: production  
     
     steps:
       - name: Checkout code
