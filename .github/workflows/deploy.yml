@@ -51,7 +51,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "docker-compose.prod.yml"
-          target: "/home/${{ secrets.EC2_USER }}/app/"
+          target: "/home/${{ secrets.EC2_USERNAME }}/app/"
 
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -60,7 +60,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/${{ secrets.EC2_USER }}/app/
+            cd /home/${{ secrets.EC2_USERNAME }}/app/
             
             # Export the username so docker-compose can read it
             export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
