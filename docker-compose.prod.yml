@@ -2,19 +2,33 @@ version: '3.8'
 
 services:
   backend:
-    # REPLACED 'build' with 'image' pointing to Docker Hub
     image: ${{ DOCKER_USERNAME }}/my-backend:latest
     container_name: backend-container
     restart: always
-    ports:
-      - "5000:5000"  # Adjust your ports
-    env_file: .env   # Reads environment variables on the server
+    expose:
+      - "5000" # Not mapped to host, only internal
+    env_file: .env
 
   frontend:
     image: ${{ DOCKER_USERNAME }}/my-frontend:latest
     container_name: frontend-container
     restart: always
-    ports:
-      - "80:80"
+    expose:
+      - "80"   # Not mapped to host, accessed via Nginx
     depends_on:
       - backend
+
+  # ADD THIS SERVICE
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-container
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # We will copy these folders to EC2 in the workflow
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+    depends_on:
+      - frontend
