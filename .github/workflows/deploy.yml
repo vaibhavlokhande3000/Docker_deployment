@@ -1,54 +1,49 @@
-name: Deploy to EC2
+name: Deploy Python App
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
 
 jobs:
-  deploy:
+  approval:
+    name: Manual Approval
     runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 2
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Waiting for approval
+        run: |
+          echo "Waiting for manual approval..."  
+  deploy:
+    runs-on: ubuntu-latest
+    needs: approval
 
-      # Step 1: Copy files to EC2
-      - name: Copy files to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "."
-          # CHANGE 1: Update the target folder name
-          target: "/home/${{ secrets.EC2_USERNAME }}/docker_deployment"
-          rm: true 
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      # Step 2: SSH into EC2 and run commands
-      - name: SSH and Deploy
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # CHANGE 2: Navigate to the correct folder
-            cd /home/${{ secrets.EC2_USERNAME }}/docker_deployment
-            
-            # 1. Create directory for certs if it doesn't exist
-            mkdir -p nginx/certs
+    - name: Login to DockerHub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-            # 2. Generate SSL Certs on the server 
-            if [ ! -f nginx/certs/selfsigned.key ]; then
-              echo "Generating Self-Signed SSL Certificates."
-              openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-                -keyout nginx/certs/selfsigned.key \
-                -out nginx/certs/selfsigned.crt \
-                -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
-            fi
+    - name: Build & Push (replace image)
+      run: |
+        docker build -t nishantkatare/python-app:latest .
+        docker push nishantkatare/python-app:latest
 
-            # 3. Stop old containers, rebuild, and start new ones
-            sudo docker-compose down
-            sudo docker-compose up -d --build
-            
-            sudo docker system prune -f
+    - name: Start SSH Agent
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: |
+          ${{ secrets.EC2_KEY }}
+
+    - name: Deploy on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+          docker ps
+          docker stop python-app || true
+          docker rm python-app || true
+          docker rmi nishantkatare/python-app:latest || true
+          docker pull nishantkatare/python-app:latest
+          docker run -d -p 8000:8000 --restart always --name python-app nishantkatare/python-app:latest
+        EOF
