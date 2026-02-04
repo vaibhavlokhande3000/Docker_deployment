@@ -41,7 +41,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.FRONTEND_IMAGE }}:latest
 
-      # 3. Build Nginx (Contains Config & Certs)
+      # 3. Build Nginx
       - name: Build/Push Nginx
         uses: docker/build-push-action@v5
         with:
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: 
       name: production
-      url: http://${{ secrets.EC2_HOST }}
+      # REMOVED the 'url' line here to fix the error
     timeout-minutes: 2
 
     steps:
@@ -64,11 +64,15 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
+          # FIX: Ensure this matches the secret name you created (EC2_USER)
+          username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          # FIX: We must pass these env vars explicitly for the script to see them
+          envs: DOCKER_USERNAME,DOCKER_PASSWORD,BACKEND_IMAGE,FRONTEND_IMAGE,NGINX_IMAGE
           script: |
-            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-            export DOCKER_PWD=${{ secrets.DOCKER_PASSWORD }}
+            # Export the secrets from the 'envs' input into the shell
+            export DOCKER_USERNAME=$DOCKER_USERNAME
+            export DOCKER_PWD=$DOCKER_PASSWORD
 
             # 1. Login to Docker Hub
             echo "$DOCKER_PWD" | docker login -u "$DOCKER_USERNAME" --password-stdin
@@ -76,29 +80,30 @@ jobs:
             # 2. Create network
             docker network create app-network || true
 
-            # 3. Stop/Remove Old Containers (Use the simpler names)
+            # 3. Stop/Remove Old Containers
             echo "Stopping old containers..."
             docker stop nginx frontend backend || true
             docker rm nginx frontend backend || true
 
             # 4. Pull Images
-            docker pull $DOCKER_USERNAME/${{ env.BACKEND_IMAGE }}:latest
-            docker pull $DOCKER_USERNAME/${{ env.FRONTEND_IMAGE }}:latest
-            docker pull $DOCKER_USERNAME/${{ env.NGINX_IMAGE }}:latest
+            # We use the DOCKER_USERNAME variable we exported above
+            docker pull $DOCKER_USERNAME/$BACKEND_IMAGE:latest
+            docker pull $DOCKER_USERNAME/$FRONTEND_IMAGE:latest
+            docker pull $DOCKER_USERNAME/$NGINX_IMAGE:latest
 
-            # 5. Run Backend (Name must match 'backend' from app.py)
+            # 5. Run Backend
             docker run -d \
               --name backend \
               --network app-network \
               --restart always \
-              $DOCKER_USERNAME/${{ env.BACKEND_IMAGE }}:latest
+              $DOCKER_USERNAME/$BACKEND_IMAGE:latest
 
-            # 6. Run Frontend (Name must match 'frontend' from nginx conf)
+            # 6. Run Frontend
             docker run -d \
               --name frontend \
               --network app-network \
               --restart always \
-              $DOCKER_USERNAME/${{ env.FRONTEND_IMAGE }}:latest
+              $DOCKER_USERNAME/$FRONTEND_IMAGE:latest
 
             # 7. Run Nginx
             docker run -d \
@@ -106,7 +111,7 @@ jobs:
               --network app-network \
               --restart always \
               -p 80:80 -p 443:443 \
-              $DOCKER_USERNAME/${{ env.NGINX_IMAGE }}:latest
+              $DOCKER_USERNAME/$NGINX_IMAGE:latest
 
             # 8. Cleanup
             docker image prune -a -f
