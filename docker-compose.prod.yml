@@ -2,19 +2,19 @@ version: '3.8'
 
 services:
   backend:
-    # Uses the exported shell variable DOCKER_USERNAME from the CI/CD pipeline
+    
     image: ${DOCKER_USERNAME}/my-backend:latest
     container_name: backend-container
     restart: always
     expose:
-      - "5000" # Internal communication only
-    # env_file: .env # Uncomment if you are using an .env file on the server
+      - "5000"
+    
 
   frontend:
     image: ${DOCKER_USERNAME}/my-frontend:latest
     container_name: frontend-container
     restart: always
     ports:
-      - "127.0.0.1:5000:5000" # Maps EC2 port 80 to container port 5000 so it's accessible via HTTP
+      - "127.0.0.1:5000:5000" 
     depends_on:
       - backend
