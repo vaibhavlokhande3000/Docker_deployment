@@ -1,49 +1,67 @@
-name: Deploy Python App
+name: Build and Deploy to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  approval:
-    name: Manual Approval
+  # JOB 1: Build and Push to DockerHub
+  build-and-push:
     runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 2
-
     steps:
-      - name: Waiting for approval
-        run: |
-          echo "Waiting for manual approval..."  
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Replace 'your-image-name' with your actual DockerHub repo name
+          tags: ${{ secrets.DOCKER_USERNAME }}/python_app:latest
+
+  # JOB 2: Deploy to EC2 (Requires Approval)
   deploy:
+    needs: build-and-push
     runs-on: ubuntu-latest
-    needs: approval
+    
+    # This links the job to the Environment settings where "Required Reviewers" is set
+    environment: 
+      name: production
+      url: http://${{ secrets.EC2_HOST }}
+
+    # This enforces the 2-minute limit. 
+    # If approval is not granted within 2 minutes, the job will fail/cancel.
+    timeout-minutes: 2 
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Login to DockerHub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-    - name: Build & Push (replace image)
-      run: |
-        docker build -t nishantkatare/python-app:latest .
-        docker push nishantkatare/python-app:latest
-
-    - name: Start SSH Agent
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: |
-          ${{ secrets.EC2_KEY }}
-
-    - name: Deploy on EC2
-      run: |
-        ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-          docker ps
-          docker stop python-app || true
-          docker rm python-app || true
-          docker rmi nishantkatare/python-app:latest || true
-          docker pull nishantkatare/python-app:latest
-          docker run -d -p 8000:8000 --restart always --name python-app nishantkatare/python-app:latest
-        EOF
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 1. Stop and remove the existing container
+            docker stop my-app-container || true
+            docker rm my-app-container || true
+            
+            # 2. Delete old images to save space (Prunes unused images)
+            docker image prune -a -f
+            
+            # 3. Pull the new image from DockerHub
+            docker pull ${{ secrets.DOCKER_USERNAME }}/python_app:latest
+            
+            # 4. Run the new container
+            # Adjust ports (-p host:container) as needed
+            docker run -d \
+              --name my-app-container \
+              --restart always \
+              -p 80:80 \
+              ${{ secrets.DOCKER_USERNAME }}/python_app:latest
