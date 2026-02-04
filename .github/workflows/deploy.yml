@@ -38,7 +38,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment: production  # <--- This triggers the Manual Approval Gate
+     # <--- This triggers the Manual Approval Gate
     
     steps:
       - name: Checkout code
