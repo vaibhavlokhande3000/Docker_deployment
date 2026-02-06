@@ -9,7 +9,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/my-frontend:latest
+        image: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/my-frontend:latest
         ports: [{ containerPort: 5000 }]
 ---
 apiVersion: v1
