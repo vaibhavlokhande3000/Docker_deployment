@@ -19,7 +19,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="card">
         <h1>Frontend Service</h1>
-        <p>Backend Status : <strong>{{ backend_message }}</strong></p>
+        <p>Backend-Status : <strong>{{ backend_message }}</strong></p>
     </div>
 </body>
 </html>
@@ -40,6 +40,7 @@ def index():
 if __name__ == "__main__":
 
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
