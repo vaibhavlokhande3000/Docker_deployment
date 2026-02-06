@@ -9,7 +9,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: <AWS_ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/my-backend:latest
+        image: 239013465433.dkr.ecr.us-east-2.amazonaws.com/my-backend:latest
         ports: [{ containerPort: 5000 }]
 ---
 apiVersion: v1
